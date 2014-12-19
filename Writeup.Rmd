@@ -1,0 +1,84 @@
+---
+title: "Pratical Machin Learning Writeup"
+author: "Marie-Aude COUTOULY"
+date: "16 décembre 2014"
+output: html_document
+---
+#Background 
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+#Goal
+
+The goal of this project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did.
+
+## Importing Data
+
+Data has been donwloaded from the cloud and it is read from my working directory.
+```{r}
+setwd("/Users/mac/Documents/BigData/datasciencecoursera/MachLearn/")
+test = read.csv("pml-testing.csv",sep=",",header=TRUE)
+train= read.csv("pml-training.csv",sep=",",header=TRUE)
+```
+
+## Cleaning Data
+Having a look at the test data, we see that some columns are only NAs. We will get rid of them. First we sum the number of NA in each column. Results are either 0 or 19216. We keep the columns with no NAs and call the new dataset cleanTrain.
+We also get rid of the 7 first columns which are only log.
+
+```{r}
+library(caret)
+str(train,list.len=15)
+sumCol <- colSums(is.na(train))
+# NA removing
+cleanTrain <- train[,sumCol == 0]
+# get rid of the 7 first columns
+cleanTrain<-subset(cleanTrain,select = -c(X,user_name,raw_timestamp_part_1,raw_timestamp_part_2,cvtd_timestamp,new_window,num_window))
+```
+In order to reduce the number of columns, we check on near zero variance.
+```{r}
+nzColumns <- nearZeroVar(cleanTrain, saveMetrics = TRUE)
+cleanTrain <- cleanTrain[, nzColumns$nzv==FALSE]
+cleanTrain$classe = factor(cleanTrain$classe)
+````
+
+## Identifying interesting features
+We use RandomForest to get the most important features, we keep the 40 first. 
+```{r}
+library(randomForest)
+library(e1071)
+library(rpart)
+set.seed(1234)
+inTrain <- createDataPartition(cleanTrain$classe,p=0.2,list=FALSE) 
+training <- cleanTrain[inTrain,]
+
+modrf<-randomForest(classe ~.,data=training)
+impVars <- varImp(modrf)
+varnames<-rownames(impVars)
+varnames
+cleanTrain[varnames[1:40]] ->  finalTrain
+classe<-cleanTrain$classe
+finalTrain<-cbind(finalTrain,classe)
+```
+
+## Data partitionning
+````{r}
+inTrain <- createDataPartition(finalTrain$classe, p = 0.75, list = FALSE)
+train.set <- finalTrain[inTrain, ]  ##  75% data as the train data
+test.set <- finalTrain[ -inTrain, ] 
+```
+
+## RandomForest training
+We use  a randomForest training on the train.set and evaluate the results with a confusion matrix
+```{r}
+modRF<-randomForest(classe ~.,data=train.set)
+predRF<-predict(modRF,test.set)
+rfMatrix<-confusionMatrix(predRF, test.set$classe)
+rfMatrix
+````
+Results are very accurate 0.991, we keep this model in order to predict from the 20 tests.
+
+## Getting prediction from test file
+```{r}
+answer <- predict(modRF, test)
+answer
+```
